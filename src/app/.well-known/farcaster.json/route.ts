@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 
-// TODO: Generate icon.png and splash.png from SVG assets in /public.
-// Farcaster requires PNG format for iconUrl and splashImageUrl.
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://air-hockey-base.vercel.app';
