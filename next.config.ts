@@ -46,6 +46,16 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  // Rewrite .well-known/farcaster.json to API route (dot-prefix dirs fail on Vercel)
+  async rewrites() {
+    return [
+      {
+        source: '/.well-known/farcaster.json',
+        destination: '/api/farcaster/manifest',
+      },
+    ];
+  },
+
   // Security headers (no X-Frame-Options to allow Farcaster iframe embedding)
   async headers() {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001';
