@@ -13,7 +13,7 @@ export const PHYSICS_CONFIG: PhysicsConfig = {
   },
 
   puck: {
-    radius: 12,
+    radius: 16,
     mass: 0.1,
     restitution: 0.98,  // Increased for better bounces without energy corrector
     friction: 0,
@@ -22,7 +22,7 @@ export const PHYSICS_CONFIG: PhysicsConfig = {
   },
 
   paddle: {
-    radius: 30,
+    radius: 42,
     mass: 1,
     restitution: 0.8,
     friction: 0.1,
