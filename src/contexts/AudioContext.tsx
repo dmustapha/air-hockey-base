@@ -148,26 +148,34 @@ export function AudioProvider({ children }: AudioProviderProps) {
     }
   }, [audioSettings]);
 
-  // Auto-unlock on first interaction
+  // Auto-unlock on user interaction (persistent - needed for iframe/webview contexts)
   useEffect(() => {
-    const handleInteraction = async () => {
-      // Resume all audio contexts on first user interaction (browser autoplay policy)
-      await synthRef.current?.unlock();
-      musicRef.current?.resume();
+    let unlocked = false;
 
-      document.removeEventListener('click', handleInteraction);
-      document.removeEventListener('touchstart', handleInteraction);
-      document.removeEventListener('keydown', handleInteraction);
+    const handleInteraction = async () => {
+      // Resume all audio contexts (browser/webview autoplay policy)
+      const synth = synthRef.current;
+      const music = musicRef.current;
+
+      if (synth) await synth.unlock();
+      if (music) music.resume();
+
+      // After first successful unlock, reduce frequency of checks
+      if (!unlocked) {
+        unlocked = true;
+        // Keep listeners active for iframe/webview re-suspension
+        // but don't remove them - some webviews re-suspend contexts
+      }
     };
 
-    document.addEventListener('click', handleInteraction, { once: true });
-    document.addEventListener('touchstart', handleInteraction, { once: true });
-    document.addEventListener('keydown', handleInteraction, { once: true });
+    document.addEventListener('click', handleInteraction);
+    document.addEventListener('touchstart', handleInteraction);
+    document.addEventListener('touchend', handleInteraction);
 
     return () => {
       document.removeEventListener('click', handleInteraction);
       document.removeEventListener('touchstart', handleInteraction);
-      document.removeEventListener('keydown', handleInteraction);
+      document.removeEventListener('touchend', handleInteraction);
     };
   }, []);
 
