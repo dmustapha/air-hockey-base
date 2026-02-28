@@ -151,9 +151,9 @@ export function AudioProvider({ children }: AudioProviderProps) {
   // Auto-unlock on first interaction
   useEffect(() => {
     const handleInteraction = async () => {
+      // Resume all audio contexts on first user interaction (browser autoplay policy)
       await synthRef.current?.unlock();
-      // Note: Ambient NOT auto-started to preserve game performance
-      // Call startAmbient() explicitly if desired
+      musicRef.current?.resume();
 
       document.removeEventListener('click', handleInteraction);
       document.removeEventListener('touchstart', handleInteraction);
