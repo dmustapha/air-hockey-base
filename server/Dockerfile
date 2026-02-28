@@ -1,3 +1,4 @@
+# Air Hockey server - Node.js only
 FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
