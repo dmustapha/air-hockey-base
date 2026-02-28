@@ -7,9 +7,9 @@ export async function GET() {
 
   return NextResponse.json({
     accountAssociation: {
-      header: "eyJmaWQiOjAsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHgwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwIn0",
+      header: "eyJmaWQiOjExMTc3NTksInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHhlZDcwMzZEMjU0NkJiY2U4OEE1NWNlM0YzRDBGODU3QTU2RUMyZTQ5In0",
       payload: "eyJkb21haW4iOiJhaXItaG9ja2V5LWJhc2UudmVyY2VsLmFwcCJ9",
-      signature: "PLACEHOLDER_GENERATE_VIA_WARPCAST_DEV_TOOLS",
+      signature: "hhvdoAuxz0/n3P7abAx0IUiRqdsVao2J/VbBUjtcWKxhDHiwgg40/Mx3SsQM9Qk0bRfnLXsgR5UaUOxLa+HwUhw=",
     },
     frame: {
       version: "1",
