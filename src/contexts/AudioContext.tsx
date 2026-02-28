@@ -153,18 +153,45 @@ export function AudioProvider({ children }: AudioProviderProps) {
     let unlocked = false;
 
     const handleInteraction = async () => {
-      // Resume all audio contexts (browser/webview autoplay policy)
       const synth = synthRef.current;
       const music = musicRef.current;
 
-      if (synth) await synth.unlock();
-      if (music) music.resume();
+      try {
+        // Direct AudioContext test - bypass all managers
+        if (!unlocked) {
+          try {
+            const testCtx = new AudioContext();
+            if (testCtx.state === 'suspended') await testCtx.resume();
+            const osc = testCtx.createOscillator();
+            const gain = testCtx.createGain();
+            gain.gain.value = 0.3;
+            osc.frequency.value = 880;
+            osc.connect(gain);
+            gain.connect(testCtx.destination);
+            osc.start();
+            osc.stop(testCtx.currentTime + 0.1);
+            console.log('[Audio] test beep played, ctx state:', testCtx.state);
+          } catch (e) {
+            console.error('[Audio] test beep FAILED:', e);
+          }
+        }
 
-      // After first successful unlock, reduce frequency of checks
+        if (synth) await synth.unlock();
+        if (music) music.resume();
+
+        // Debug: log audio state (visible in Warpcast console/remote debug)
+        console.log('[Audio] unlock attempt', {
+          synthState: synth?.isUnlocked?.() ?? 'no synth',
+          synthInit: synth?.isInitialized?.() ?? 'no synth',
+          musicInit: music ? 'yes' : 'no',
+          unlocked,
+        });
+      } catch (err) {
+        console.error('[Audio] unlock failed:', err);
+      }
+
       if (!unlocked) {
         unlocked = true;
-        // Keep listeners active for iframe/webview re-suspension
-        // but don't remove them - some webviews re-suspend contexts
       }
     };
 
