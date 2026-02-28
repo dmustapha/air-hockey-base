@@ -26,10 +26,10 @@ class SynthAudio {
     return SynthAudio.instance;
   }
 
-  async init(): Promise<void> {
+  async init(sharedContext?: AudioContext): Promise<void> {
     if (this.initialized) return;
 
-    this.ctx = new AudioContext();
+    this.ctx = sharedContext || new AudioContext();
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.value = this.masterVolume;
     this.masterGain.connect(this.ctx.destination);
@@ -45,10 +45,12 @@ class SynthAudio {
 
   private getContext(): AudioContext {
     if (!this.ctx) {
+      // Reuse existing global context if available to avoid iOS webview limits
       this.ctx = new AudioContext();
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.value = this.masterVolume;
       this.masterGain.connect(this.ctx.destination);
+      console.warn('[SynthAudio] Created fallback AudioContext — should use shared context');
     }
     return this.ctx;
   }

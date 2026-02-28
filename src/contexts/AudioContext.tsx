@@ -94,26 +94,32 @@ export function AudioProvider({ children }: AudioProviderProps) {
   const synthRef = useRef<SynthAudio | null>(null);
   const musicRef = useRef<MusicPlayer | null>(null);
   const ambientRef = useRef<AmbientSoundscape | null>(null);
+  const sharedCtxRef = useRef<AudioContext | null>(null);
 
   const audioSettings = useSettingsStore((state) => state.settings.audio);
 
-  // Initialize all audio systems
+  // Initialize all audio systems with a SINGLE shared AudioContext
+  // iOS webviews (Warpcast) limit AudioContext instances to 1-2 per iframe
   useEffect(() => {
     const initAudio = async () => {
-      // Initialize SynthAudio (SFX)
+      // Create ONE shared AudioContext for all audio systems
+      const sharedCtx = new AudioContext();
+      sharedCtxRef.current = sharedCtx;
+
+      // Initialize SynthAudio (SFX) with shared context
       const synth = SynthAudio.getInstance();
       synthRef.current = synth;
-      await synth.init();
+      await synth.init(sharedCtx);
 
-      // Initialize MusicPlayer
+      // Initialize MusicPlayer with shared context
       const music = MusicPlayer.getInstance();
       musicRef.current = music;
-      await music.init();
+      await music.init(sharedCtx);
 
-      // Initialize AmbientSoundscape
+      // Initialize AmbientSoundscape with shared context
       const ambient = AmbientSoundscape.getInstance();
       ambientRef.current = ambient;
-      await ambient.init();
+      await ambient.init(sharedCtx);
 
       setIsInitialized(true);
     };
@@ -148,50 +154,18 @@ export function AudioProvider({ children }: AudioProviderProps) {
     }
   }, [audioSettings]);
 
-  // Auto-unlock on user interaction (persistent - needed for iframe/webview contexts)
+  // Resume shared AudioContext on user interaction (required by browser autoplay policy)
+  // Persistent listeners — iOS webviews can re-suspend contexts
   useEffect(() => {
-    let unlocked = false;
-
     const handleInteraction = async () => {
-      const synth = synthRef.current;
-      const music = musicRef.current;
-
-      try {
-        // Direct AudioContext test - bypass all managers
-        if (!unlocked) {
-          try {
-            const testCtx = new AudioContext();
-            if (testCtx.state === 'suspended') await testCtx.resume();
-            const osc = testCtx.createOscillator();
-            const gain = testCtx.createGain();
-            gain.gain.value = 0.3;
-            osc.frequency.value = 880;
-            osc.connect(gain);
-            gain.connect(testCtx.destination);
-            osc.start();
-            osc.stop(testCtx.currentTime + 0.1);
-            console.log('[Audio] test beep played, ctx state:', testCtx.state);
-          } catch (e) {
-            console.error('[Audio] test beep FAILED:', e);
-          }
+      const ctx = sharedCtxRef.current;
+      if (ctx && ctx.state === 'suspended') {
+        try {
+          await ctx.resume();
+          console.log('[Audio] Context resumed:', ctx.state);
+        } catch (err) {
+          console.error('[Audio] Context resume failed:', err);
         }
-
-        if (synth) await synth.unlock();
-        if (music) music.resume();
-
-        // Debug: log audio state (visible in Warpcast console/remote debug)
-        console.log('[Audio] unlock attempt', {
-          synthState: synth?.isUnlocked?.() ?? 'no synth',
-          synthInit: synth?.isInitialized?.() ?? 'no synth',
-          musicInit: music ? 'yes' : 'no',
-          unlocked,
-        });
-      } catch (err) {
-        console.error('[Audio] unlock failed:', err);
-      }
-
-      if (!unlocked) {
-        unlocked = true;
       }
     };
 
