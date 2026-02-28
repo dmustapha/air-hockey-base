@@ -46,41 +46,12 @@ const nextConfig: NextConfig = {
     return config;
   },
 
-  // Rewrite .well-known/farcaster.json to API route (dot-prefix dirs fail on Vercel)
+  // Rewrite .well-known/farcaster.json to API route
   async rewrites() {
     return [
       {
         source: '/.well-known/farcaster.json',
         destination: '/api/farcaster/manifest',
-      },
-    ];
-  },
-
-  // Security headers (no X-Frame-Options to allow Farcaster iframe embedding)
-  async headers() {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001';
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
-
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https:",
-      `connect-src 'self' ${apiUrl} ${wsUrl} https://*.walletconnect.com wss://*.walletconnect.com https://sepolia.base.org https://mainnet.base.org`,
-      "frame-ancestors 'self' https://warpcast.com https://*.farcaster.xyz",
-      "object-src 'none'",
-    ].join('; ');
-
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          { key: 'Content-Security-Policy', value: csp },
-          { key: 'X-Content-Type-Options', value: 'nosniff' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'X-XSS-Protection', value: '1; mode=block' },
-        ],
       },
     ];
   },
