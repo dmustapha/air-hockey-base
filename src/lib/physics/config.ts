@@ -15,10 +15,10 @@ export const PHYSICS_CONFIG: PhysicsConfig = {
   puck: {
     radius: 16,
     mass: 0.1,
-    restitution: 0.98,  // Increased for better bounces without energy corrector
+    restitution: 0.92,  // Less bouncy — 8% energy loss per bounce (was 2%)
     friction: 0,
-    frictionAir: 0.0005,  // Near-zero for consistent speed
-    maxSpeed: 25,
+    frictionAir: 0.002,  // Meaningful deceleration so ball doesn't fly endlessly
+    maxSpeed: 18,         // Controllable on mobile (was 25)
   },
 
   paddle: {
@@ -44,10 +44,10 @@ export const PHYSICS_CONFIG: PhysicsConfig = {
 
 export const AI_CONFIGS: Record<Difficulty, AIConfig> = {
   easy: {
-    reactionDelay: 450,      // Slow reactions - updates target every 450ms
-    speedMultiplier: 0.35,   // Very slow movement
-    predictionAccuracy: 0.45, // Lots of prediction error (55 pixel spread)
-    aggressiveness: 0.3,     // Stays near goal line
+    reactionDelay: 600,      // Very slow reactions — updates ~1.7x/sec
+    speedMultiplier: 0.25,   // Sluggish movement
+    predictionAccuracy: 0.30, // 70px prediction error spread
+    aggressiveness: 0.2,     // Hugs own goal line
   },
   medium: {
     reactionDelay: 180,      // Moderate reactions

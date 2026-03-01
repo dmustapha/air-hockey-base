@@ -450,8 +450,9 @@ class AmbientSoundscape {
 
   async init(audioContext?: AudioContext): Promise<void> {
     if (this.initialized) return;
+    if (!audioContext) return; // Require shared context — never create our own
 
-    this.ctx = audioContext || new AudioContext();
+    this.ctx = audioContext;
 
     // Master compression
     this.compressor = this.ctx.createDynamicsCompressor();

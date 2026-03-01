@@ -3,10 +3,10 @@
 /**
  * AudioContext - React context for complete game audio
  *
- * Integrates:
- * - SynthAudio: Synthesized SFX (works immediately, no files)
- * - MusicPlayer: Background music with crossfading (requires audio files)
- * - AmbientSoundscape: Synthesized ambient layers (works immediately)
+ * Audio systems:
+ * - SynthAudio:         Pre-rendered WAV files via HTML5 <audio> (works in Warpcast)
+ * - MusicPlayer:        Background music via HTML5 <audio> (works in Warpcast)
+ * - AmbientSoundscape:  Web Audio API oscillators (desktop only — graceful skip on iOS webviews)
  */
 
 import React, {
@@ -77,7 +77,6 @@ export function useAudioContext(): AudioContextValue {
   return context;
 }
 
-// Aliases for backward compatibility
 export const useAudio = useAudioContext;
 export function useAudioOptional(): AudioContextValue | null {
   return useContext(AudioContext);
@@ -94,41 +93,26 @@ export function AudioProvider({ children }: AudioProviderProps) {
   const synthRef = useRef<SynthAudio | null>(null);
   const musicRef = useRef<MusicPlayer | null>(null);
   const ambientRef = useRef<AmbientSoundscape | null>(null);
-  const sharedCtxRef = useRef<AudioContext | null>(null);
 
   const audioSettings = useSettingsStore((state) => state.settings.audio);
 
-  // Initialize all audio systems with a SINGLE shared AudioContext
-  // iOS webviews (Warpcast) limit AudioContext instances to 1-2 per iframe
+  // Initialize all audio systems on mount.
+  // SynthAudio + MusicPlayer use HTML5 Audio — no AudioContext needed.
+  // AmbientSoundscape needs Web Audio API and is initialized lazily on gesture.
   useEffect(() => {
-    const initAudio = async () => {
-      // Create ONE shared AudioContext for all audio systems
-      const sharedCtx = new AudioContext();
-      sharedCtxRef.current = sharedCtx;
+    const synth = SynthAudio.getInstance();
+    const music = MusicPlayer.getInstance();
+    const ambient = AmbientSoundscape.getInstance();
 
-      // Initialize SynthAudio (SFX) with shared context
-      const synth = SynthAudio.getInstance();
-      synthRef.current = synth;
-      await synth.init(sharedCtx);
+    synthRef.current = synth;
+    musicRef.current = music;
+    ambientRef.current = ambient;
 
-      // Initialize MusicPlayer with shared context
-      const music = MusicPlayer.getInstance();
-      musicRef.current = music;
-      await music.init(sharedCtx);
+    // Both use HTML5 Audio — safe to init immediately
+    synth.init();
+    music.init();
 
-      // Initialize AmbientSoundscape with shared context
-      const ambient = AmbientSoundscape.getInstance();
-      ambientRef.current = ambient;
-      await ambient.init(sharedCtx);
-
-      setIsInitialized(true);
-    };
-
-    initAudio();
-
-    return () => {
-      // Don't dispose - singletons shared across app
-    };
+    setIsInitialized(true);
   }, []);
 
   // Sync volume settings
@@ -154,17 +138,31 @@ export function AudioProvider({ children }: AudioProviderProps) {
     }
   }, [audioSettings]);
 
-  // Resume shared AudioContext on user interaction (required by browser autoplay policy)
-  // Persistent listeners — iOS webviews can re-suspend contexts
+  // On user gesture: unlock HTML5 Audio + try Web Audio API for ambient
   useEffect(() => {
+    let ambientReady = false;
+    let ambientInitInProgress = false;
+
     const handleInteraction = async () => {
-      const ctx = sharedCtxRef.current;
-      if (ctx && ctx.state === 'suspended') {
+      // Unlock HTML5 Audio elements (iOS autoplay policy)
+      synthRef.current?.unlock();
+      musicRef.current?.unlock();
+
+      // Try to set up Web Audio API for AmbientSoundscape (optional, best-effort)
+      if (!ambientReady && !ambientInitInProgress) {
+        ambientInitInProgress = true;
         try {
-          await ctx.resume();
-          console.log('[Audio] Context resumed:', ctx.state);
-        } catch (err) {
-          console.error('[Audio] Context resume failed:', err);
+          const AudioCtx = window.AudioContext
+            || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          if (AudioCtx) {
+            const ctx = new AudioCtx();
+            await ambientRef.current?.init(ctx);
+            ambientReady = true;
+          }
+        } catch {
+          // Web Audio API unavailable — ambient won't play, everything else works
+        } finally {
+          ambientInitInProgress = false;
         }
       }
     };
@@ -339,7 +337,6 @@ export function AudioProvider({ children }: AudioProviderProps) {
   const value: AudioContextValue = {
     isInitialized,
     isMuted,
-    // Gameplay
     playHit,
     playPaddleHit,
     playWallBounce,
@@ -351,7 +348,6 @@ export function AudioProvider({ children }: AudioProviderProps) {
     playMatchEnd,
     playVictory,
     playDefeat,
-    // UI
     playClick,
     playButtonClick,
     playHover,
@@ -360,18 +356,15 @@ export function AudioProvider({ children }: AudioProviderProps) {
     playError,
     playPanelOpen,
     playPanelClose,
-    // Music
     playMenuMusic,
     playGameMusic,
     playOvertimeMusic,
     playVictoryMusic,
     playDefeatMusic,
     stopMusic,
-    // Ambient
     setAmbientState,
     startAmbient,
     stopAmbient,
-    // Controls
     toggleMute,
     setMuted: setMutedState,
   };

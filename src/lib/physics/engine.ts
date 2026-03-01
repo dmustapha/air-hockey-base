@@ -44,6 +44,9 @@ interface PaddleState {
  * Create and configure the game physics engine
  */
 export function createGameEngine(callbacks: EngineCallbacks): GameEngine {
+  // Reset corner detection state for new game
+  cornerStuckFrames = 0;
+
   // Create engine with no gravity (top-down view)
   const engine = Engine.create({
     gravity: PHYSICS_CONFIG.engine.gravity,
@@ -262,6 +265,13 @@ export function createGameEngine(callbacks: EngineCallbacks): GameEngine {
   };
 }
 
+// Corner stuck detection — if puck lingers in a corner at low speed, nudge it out
+let cornerStuckFrames = 0;
+const CORNER_THRESHOLD = 60;  // px from walls to count as "corner zone"
+const STUCK_SPEED = 3;        // below this speed = potentially stuck
+const STUCK_FRAMES = 30;      // ~0.5s at 60fps before nudge
+const NUDGE_SPEED = 4;        // gentle push toward center
+
 /**
  * Update physics simulation (call every frame)
  *
@@ -310,6 +320,31 @@ export function updatePhysics(engine: Matter.Engine, delta: number): void {
         x: pos.x !== clampedX ? -vel.x * 0.8 : vel.x,
         y: pos.y !== clampedY ? -vel.y * 0.8 : vel.y,
       });
+    }
+
+    // 3. Corner stuck detection — nudge puck toward center if trapped
+    // Use fresh position and velocity after all clamps above
+    const curPos = puckBody.position;
+    const curSpeed = Math.sqrt(puckBody.velocity.x ** 2 + puckBody.velocity.y ** 2);
+    const nearSideWall = curPos.x < CORNER_THRESHOLD || curPos.x > table.width - CORNER_THRESHOLD;
+    const nearEndWall = curPos.y < CORNER_THRESHOLD || curPos.y > table.height - CORNER_THRESHOLD;
+
+    if (nearSideWall && nearEndWall && curSpeed < STUCK_SPEED) {
+      cornerStuckFrames++;
+      if (cornerStuckFrames >= STUCK_FRAMES) {
+        const centerX = table.width / 2;
+        const centerY = table.height / 2;
+        const dx = centerX - curPos.x;
+        const dy = centerY - curPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        Body.setVelocity(puckBody, {
+          x: (dx / dist) * NUDGE_SPEED,
+          y: (dy / dist) * NUDGE_SPEED,
+        });
+        cornerStuckFrames = 0;
+      }
+    } else {
+      cornerStuckFrames = 0;
     }
   }
 }
