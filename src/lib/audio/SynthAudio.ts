@@ -5,10 +5,8 @@
  * compatibility with iOS webviews (Warpcast, etc.) where Web Audio API
  * is unreliable or completely blocked.
  *
- * Pattern borrowed from working Farcaster mini apps (Slay to Earn):
- *   - Preload Audio elements with preload="auto"
- *   - Play by resetting currentTime=0 and calling play()
- *   - Pool multiple elements per sound for overlapping playback
+ * Lazy-loads: Audio elements are created on first play, not on init.
+ * This avoids blocking the main thread with 60+ simultaneous network requests.
  */
 
 type SfxName =
@@ -23,31 +21,14 @@ type SfxName =
   | 'error'
   | 'panel_open' | 'panel_close';
 
-const SFX_LIST: SfxName[] = [
-  'hit_0', 'hit_1', 'hit_2', 'hit_3', 'hit_4',
-  'wall_bounce',
-  'goal_player', 'goal_opponent',
-  'countdown_beep', 'countdown_go',
-  'match_point', 'match_end',
-  'victory', 'defeat',
-  'click', 'hover', 'back',
-  'toggle_on', 'toggle_off',
-  'error',
-  'panel_open', 'panel_close',
-];
-
-/** How many Audio elements to pool per sound (for overlapping plays) */
-const POOL_SIZE = 3;
-
 class SynthAudio {
   private static instance: SynthAudio;
 
-  /** Pool of preloaded Audio elements per SFX name */
-  private pools: Map<SfxName, HTMLAudioElement[]> = new Map();
-  /** Round-robin index per pool */
-  private poolIndex: Map<SfxName, number> = new Map();
+  /** Lazily-created Audio elements per SFX name */
+  private elements: Map<SfxName, HTMLAudioElement> = new Map();
 
   private initialized = false;
+  private unlocked = false;
   private muted = false;
 
   private masterVolume = 0.8;
@@ -62,47 +43,40 @@ class SynthAudio {
     return SynthAudio.instance;
   }
 
-  /**
-   * Preload all SFX as HTML5 Audio elements.
-   * No AudioContext needed — works everywhere HTML5 Audio works.
-   */
   async init(): Promise<void> {
     if (this.initialized) return;
-
-    for (const name of SFX_LIST) {
-      const pool: HTMLAudioElement[] = [];
-      for (let i = 0; i < POOL_SIZE; i++) {
-        const audio = new Audio(`/audio/sfx/${name}.wav`);
-        audio.preload = 'auto';
-        audio.addEventListener('error', () => {
-          // WAV file missing or failed to load — play() will no-op gracefully
-        });
-        audio.load();
-        pool.push(audio);
-      }
-      this.pools.set(name, pool);
-      this.poolIndex.set(name, 0);
-    }
-
     this.initialized = true;
+    // No eager loading — elements created lazily on first play
+  }
+
+  /** Get or create an Audio element for a sound */
+  private getAudio(name: SfxName): HTMLAudioElement {
+    let audio = this.elements.get(name);
+    if (!audio) {
+      audio = new Audio(`/audio/sfx/${name}.wav`);
+      audio.preload = 'auto';
+      this.elements.set(name, audio);
+    }
+    return audio;
   }
 
   /**
-   * Retry playing any paused audio on user gesture.
+   * Unlock audio on user gesture.
    * iOS requires play() inside a user-initiated event.
+   * Only unlocks already-created elements (not all 22).
    */
   unlock(): void {
-    // Warm ALL pooled elements — iOS autoplay policy applies per-element
-    for (const pool of this.pools.values()) {
-      for (const el of pool) {
-        if (el.paused) {
-          el.volume = 0;
-          el.play().then(() => {
-            el.pause();
-            el.currentTime = 0;
-            el.volume = 1;
-          }).catch(() => {});
-        }
+    if (this.unlocked) return;
+    this.unlocked = true;
+
+    for (const el of this.elements.values()) {
+      if (el.paused) {
+        el.volume = 0;
+        el.play().then(() => {
+          el.pause();
+          el.currentTime = 0;
+          el.volume = 1;
+        }).catch(() => {});
       }
     }
   }
@@ -114,19 +88,11 @@ class SynthAudio {
   private play(name: SfxName, volume?: number): void {
     if (this.muted || !this.initialized) return;
 
-    const pool = this.pools.get(name);
-    if (!pool) return;
-
-    const idx = this.poolIndex.get(name) ?? 0;
-    const audio = pool[idx];
-    this.poolIndex.set(name, (idx + 1) % POOL_SIZE);
-
+    const audio = this.getAudio(name);
     const effectiveVolume = (volume ?? 1) * this.sfxVolume * this.masterVolume;
     audio.volume = Math.max(0, Math.min(1, effectiveVolume));
     audio.currentTime = 0;
-    audio.play().catch(() => {
-      // Autoplay blocked — will work after user gesture unlocks
-    });
+    audio.play().catch(() => {});
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -163,7 +129,7 @@ class SynthAudio {
   }
 
   isUnlocked(): boolean {
-    return this.initialized; // HTML5 Audio doesn't have a "suspended" state
+    return this.unlocked;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -250,16 +216,14 @@ class SynthAudio {
   // ═══════════════════════════════════════════════════════════
 
   dispose(): void {
-    for (const pool of this.pools.values()) {
-      for (const audio of pool) {
-        audio.pause();
-        audio.removeAttribute('src');
-        audio.load();
-      }
+    for (const audio of this.elements.values()) {
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
     }
-    this.pools.clear();
-    this.poolIndex.clear();
+    this.elements.clear();
     this.initialized = false;
+    this.unlocked = false;
   }
 }
 
